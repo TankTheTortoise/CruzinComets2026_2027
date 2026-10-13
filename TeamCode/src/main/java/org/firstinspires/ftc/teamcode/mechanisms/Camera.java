@@ -36,18 +36,43 @@ public class Camera {
     private static AprilTagProcessor aprilTag;
     private static VisionPortal visionPortal;
 
-    private static boolean useTelemetry;
-    private static Telemetry telemetry;
+    private static boolean ourTelemetry;
+    private static Telemetry subTelemetry;
 
     public static void init(String cameraName, HardwareMap hardwareMap, Telemetry telemetry, boolean useTelemetry) {
 
-        aprilTag = AprilTagProcessor.easyCreateWithDefaults();
+        aprilTag = new AprilTagProcessor.Builder()
 
-        visionPortal = VisionPortal.easyCreateWithDefaults(
-                hardwareMap.get(WebcamName.class, cameraName)
-        );
-        useTelemetry = useTelemetry;
-        telemetry = telemetry;
+                // The following default settings are available to un-comment and edit as needed.
+                .setDrawAxes(true) // Changed in V12.0
+                .setDrawTagOutline(true)
+                //.setTagFamily(AprilTagProcessor.TagFamily.TAG_36h11)
+                //.setTagLibrary(AprilTagGameDatabase.getCenterStageTagLibrary())
+                //.setOutputUnits(DistanceUnit.INCH, AngleUnit.DEGREES)
+                .setDrawCubeProjection(true)
+
+                // == CAMERA CALIBRATION ==
+                // If you do not manually specify calibration parameters, the SDK will attempt
+                // to load a predefined calibration for your camera.
+                //.setLensIntrinsics(578.272, 578.272, 402.145, 221.506)
+                // ... these parameters are fx, fy, cx, cy.
+
+                .build();
+// Create the vision portal by using a builder.
+        VisionPortal.Builder builder = new VisionPortal.Builder();
+
+
+        builder.setCamera(hardwareMap.get(WebcamName.class, cameraName));
+
+
+        // Set and enable the processor.
+        builder.addProcessor(aprilTag);
+
+        // Build the Vision Portal, using the above settings.
+        visionPortal = builder.build();
+
+        ourTelemetry = useTelemetry;
+        subTelemetry = telemetry;
 
 
     }
@@ -55,8 +80,8 @@ public class Camera {
     // We don't always know if we will detect AprilTags
     // So, we use Optional
     // It allows use to return either the list or nothing
-    public static Optional<List<String>> detectedTags() {
-
+    public static List<String> detectedTags() {
+        subTelemetry.addLine("Detecting");
 
         // We will put the integer numbers of the detected tags here
         // We don't need all of the information for every tag
@@ -66,9 +91,7 @@ public class Camera {
         List<AprilTagDetection> currentDetections = aprilTag.getDetections();
 
         // If there is no April Tag detected, we return "nothing"
-        if (currentDetections.isEmpty()) {
-            return Optional.empty();
-        }
+
 
         for (AprilTagDetection detection : currentDetections) {
 
@@ -90,24 +113,24 @@ public class Camera {
                 detected_tags.add(clusterDet.metadata.name);
 
                 // Adding the cluster name to
-                if (useTelemetry) {
+                if (ourTelemetry) {
                     // Tag clusters have specific names, not id's.
-                    telemetry.addData("====== Tag Cluster", clusterDet.metadata.name);
+                    subTelemetry.addData("====== Tag Cluster", clusterDet.metadata.name);
                     // Percent tags found is to determine if anything is blocking the tags
-                    telemetry.addData("Percent tags found", clusterDet.percentClusterFound);
-                    telemetry.addData("Range", detection.ftcPose.range);
-                    telemetry.addData("Bearing", detection.ftcPose.bearing);
-                    telemetry.addData("Elevation", detection.ftcPose.elevation);
+                    subTelemetry.addData("Percent tags found", clusterDet.percentClusterFound);
+                    subTelemetry.addData("Range", detection.ftcPose.range);
+                    subTelemetry.addData("Bearing", detection.ftcPose.bearing);
+                    subTelemetry.addData("Elevation", detection.ftcPose.elevation);
                 }
 
             }
         }
 
 
-        return Optional.of(detected_tags);
+        return detected_tags;
     }
 
-    public static Optional<AprilTagClusterDetection> get(String name) {
+    public static AprilTagClusterDetection get(String name) {
         List<AprilTagDetection> detections = aprilTag.getDetections();
 
         for (AprilTagDetection detection : detections) {
@@ -117,12 +140,13 @@ public class Camera {
                 // String == other_string checks if they are both the same variable
                 // So we must use .equals for String comparisons
                 if (name.equals(cluster_detection.metadata.name)) {
-                    return Optional.of(cluster_detection);
+                    return cluster_detection;
                 }
             }
         }
-        return Optional.empty();
+        return null;
     }
+
 
     public static boolean isScorable() {
 
